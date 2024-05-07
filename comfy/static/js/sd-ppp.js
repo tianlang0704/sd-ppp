@@ -1,8 +1,9 @@
-import { app } from "../../scripts/app.js";
-import { api } from "../../scripts/api.js"
+import { app } from "../../../scripts/app.js";
+import { api } from "../../../scripts/api.js"
 
 let layerStrs = [];
 let boundsStrs = [];
+let setLayerStrs = [];
 
 console.log("[sd-ppp]", "Loading js extension");
 app.registerExtension({
@@ -29,14 +30,27 @@ app.registerExtension({
 				if(onMouseEnter) await onMouseEnter.call(this, ...args);
 				this_handler.call(this);
 			}
+		} else if (nodeType.comfyClass === 'Send Images To Photoshop') {
+			const onSelected = nodeType.prototype.onSelected;
+			const onMouseEnter = nodeType.prototype.onMouseEnter;
+			let this_handler = function() {
+				this.widgets[0].options.values = setLayerStrs;
+			}
+			nodeType.prototype.onSelected = async function(...args) {
+				if(onSelected) await onSelected.call(this, ...args);
+				this_handler.call(this);
+			}
+			nodeType.prototype.onMouseEnter = async function(...args) {
+				if(onMouseEnter) await onMouseEnter.call(this, ...args);
+				this_handler.call(this);
+			}
 		}
 	}
 });
 
 const SDPPPNodes = [
 	'Get Image From Photoshop Layer',
-    'Send Images To Photoshop',
-    'Send Images To Photoshop Set Layer',
+    'Send Images To Photoshop'
 ]
 async function checkChanges() {
 	await checkHistoryChanges();
@@ -49,6 +63,7 @@ async function refreshLayers() {
 		const json = await res.json()
 		layerStrs = json.layer_strs;
 		boundsStrs = json.bounds_strs;
+		setLayerStrs = json.set_layer_strs;
 	} catch (e) {
 		console.error("[sd-ppp]", "Failed to get layers", e);
 	}

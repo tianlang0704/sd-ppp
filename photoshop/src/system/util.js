@@ -1,3 +1,15 @@
+import { core } from "photoshop";
+
+export const SPECIAL_LAYER_USE_CANVAS = '### Use Canvas ###'
+export const SPECIAL_LAYER_USE_SELECTION = '### Use Selection ###'
+export const SPECIAL_LAYER_NEW_LAYER = '### New Layer ###'
+export const SPECIAL_LAYER_SAME_AS_LAYER = '### Same as Layer ###'
+export const SPECIAL_LAYER_NAME_TO_ID = {
+    SPECIAL_LAYER_USE_CANVAS: 0,
+    SPECIAL_LAYER_USE_SELECTION: -1,
+    SPECIAL_LAYER_NEW_LAYER: -2,
+    SPECIAL_LAYER_SAME_AS_LAYER: -3
+}
 
 export function unTrimImageData(
     intersectImageDataArray,
@@ -56,7 +68,7 @@ export function unTrimImageData(
 }
 
 export function getAllSubLayer(layer, level = 0) {
-    if (!layer.layers) return [];
+    if (!layer?.layers) return [];
     return layer.layers.reduce((ret, layer) => {
         ret.push({
             name: '-'.repeat(level) + layer.name,
@@ -67,7 +79,7 @@ export function getAllSubLayer(layer, level = 0) {
 }
 
 export function findInAllSubLayer(layer, layerid) {
-    if (!layer.layers) return null;
+    if (!layer?.layers) return null;
     for (let i = 0; i < layer.layers.length; i++) {
         if (layer.layers[i].id === layerid) return layer.layers[i];
 
@@ -75,4 +87,21 @@ export function findInAllSubLayer(layer, layerid) {
         if (result) return result;
     }
     return null;
+}
+
+export async function executeAsModalUntilSuccess(...args) {
+    let result;
+    let failed = true;
+    while(failed) {
+        try {
+            result = await core.executeAsModal(...args);
+            failed = false;
+        } catch (e) {
+            if (e.number != 9) {
+                failed = false; // This case is hit if the targetFunction throws an exception
+            }
+        }
+        await new Promise(r => setTimeout(r, 200));
+    }
+    return result;
 }
