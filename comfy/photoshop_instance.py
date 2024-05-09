@@ -16,10 +16,48 @@ class PhotoshopInstance:
         SPECIAL_LAYER_SAME_AS_LAYER: -3
     }
 
-    instance = None
+    _instances = {}
+
+    @classmethod
+    def instance(cls, id = None):
+        if len(PhotoshopInstance._instances) <= 0:
+            return None
+        if id is None:
+            return PhotoshopInstance._instances.get(0, None)
+        return PhotoshopInstance._instances.get(id, None)
     
-    def __init__(self, ws):
-        PhotoshopInstance.instance = self
+    @classmethod
+    def set_instance(cls, id, instance):
+        PhotoshopInstance._instances[id] = instance
+
+    @classmethod
+    async def destroy_instance(cls, id = 0):
+        instance = PhotoshopInstance._instances.get(id, None)
+        if instance is None:
+            return
+        if instance.destroyed == False:
+            await instance.destroy()
+        PhotoshopInstance._instances.pop(id)
+    
+    _ip_to_client_id = {}
+    @classmethod
+    def add_client_id(self, ip, client_id):
+        client_id_list = PhotoshopInstance._ip_to_client_id.get(ip, [])
+        if client_id in client_id_list:
+            return
+        client_id_list.append(client_id)
+        PhotoshopInstance._ip_to_client_id[ip] = client_id_list
+    
+    @classmethod
+    def instance_from_client_id(cls, client_id):
+        for ip, client_id_list in PhotoshopInstance._ip_to_client_id.items():
+            if client_id in client_id_list:
+                return PhotoshopInstance.instance(ip)
+        return None
+    
+    def __init__(self, ws, id = 0):
+        PhotoshopInstance.set_instance(id, self)
+        self.id = id
         self.wsCallsManager = WSCallsManager(ws, self.message_handler)
         self.destroyed = False
         self.layers = []
@@ -161,10 +199,15 @@ class PhotoshopInstance:
         self.last_get_img_id = None
         self.change_tracker = {}
         self.comfyui_last_value_tracker = {}
-            
+
+    async def confirm_client(self):
+        result = await self.wsCallsManager.call('confirm_client', {'confirm_number': 1234})
+        is_confirmed = result.get('is_confirmed', False)
+        return is_confirmed, self
+
     async def destroy(self):
         if self.destroyed:
             return
         self.destroyed = True
-        PhotoshopInstance.instance = None
-        await self.wsCallsManager.destroy()
+        await PhotoshopInstance.destroy_instance(self.id)
+        await self.wsCallsManager.ws.close()

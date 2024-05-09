@@ -49,38 +49,50 @@ async def websocket_handler(request):
             return web.json_response({ 
                 'error': f'version {version} not supported.',
             })
-        
-    if (PhotoshopInstance.instance is not None):
+    ip = request.remote
+    instance = PhotoshopInstance.instance(ip)
+    if (instance is not None):
         print('destroying previous instance')
-        await PhotoshopInstance.instance.destroy()
+        await instance.destroy()
     ws = web.WebSocketResponse()
     await ws.prepare(request)
     
-    PhotoshopInstance(ws)
-    await PhotoshopInstance.instance.run_server_loop()
+    instance = PhotoshopInstance(ws=ws, id=ip)
+    await instance.run_server_loop()
 
 @PromptServer.instance.routes.get("/sd-ppp/checkchanges")
 async def check_changes(request):
+    ip = request.remote
+    client_id = request.query.get('client_id', None)
+    if client_id is not None:
+        PhotoshopInstance.add_client_id(ip, client_id)
     is_changed = False
-    if (PhotoshopInstance.instance is not None):
-        is_changed = await PhotoshopInstance.instance.is_ps_history_changed()
+    if (PhotoshopInstance.instance(ip) is not None):
+        is_changed = await PhotoshopInstance.instance(ip).is_ps_history_changed()
     return web.json_response({'is_changed': is_changed}, content_type='application/json')
 
-@PromptServer.instance.routes.get("/sd-ppp/resetchanges")
+@PromptServer.instance.routes.get("/sd-ppp/init")
 async def reset_changes(request):
-    if (PhotoshopInstance.instance is not None):
-        PhotoshopInstance.instance.reset_change_tracker()
+    ip = request.remote
+    client_id = request.query.get('client_id', None)
+    if client_id is not None:
+        PhotoshopInstance.add_client_id(ip, client_id)
+    intance = PhotoshopInstance.instance(ip)
+    if (intance is not None):
+        intance.reset_change_tracker()
     return web.json_response({}, content_type='application/json')
 
 @PromptServer.instance.routes.get("/sd-ppp/getlayers")
 async def get_layers(request):
+    ip = request.remote
     layer_strs = []
     bounds_strs = []
     set_layer_strs = []
-    if (PhotoshopInstance.instance is not None):
-        layer_strs = PhotoshopInstance.instance.get_base_layers()
-        bounds_strs = PhotoshopInstance.instance.get_bounds_layers()
-        set_layer_strs = PhotoshopInstance.instance.get_set_layers()
+    instance = PhotoshopInstance.instance(ip)
+    if (instance is not None):
+        layer_strs = instance.get_base_layers()
+        bounds_strs = instance.get_bounds_layers()
+        set_layer_strs = instance.get_set_layers()
     return web.json_response({
         'layer_strs': layer_strs, 
         'bounds_strs': bounds_strs, 
