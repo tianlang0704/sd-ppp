@@ -2,49 +2,7 @@ from aiohttp import WSMsgType
 import threading
 import asyncio
 import json
-
-class WSCallsManager:
-    ws = None
-    def __init__(self, ws):
-        self.calls = dict()
-        self.call_id = 0
-        self.ws = ws
-    
-    async def call(self, action, params, timeout=30):
-        self.call_id += 1
-        payload = {
-            'call_id': self.call_id,
-            'action': action,
-            'params': params
-        }
-        call = self.calls[self.call_id] = asyncio.Future()
-        
-        await self.ws.send_str(json.dumps(payload))
-        start_time = asyncio.get_event_loop().time()
-        while (call.done() == False):
-            if (asyncio.get_event_loop().time() - start_time > timeout):
-                call.cancel()
-                raise ValueError('call timed out')
-            await asyncio.sleep(0.1)    
-        return call.result()
-    
-    def handle_call(self, call_id, result=None, error=None):
-        call = self._get_call_and_remove(call_id)
-        if (call.cancelled()):
-            return
-        
-        if (error is not None):
-            call.set_exception(ValueError(error))
-        else:
-            call.set_result(result)
-    
-    def _get_call_and_remove(self, call_id):
-        call = self.calls.get(call_id, None)
-        if call is not None:
-            self.calls.pop(call_id)
-        else:
-            raise ValueError(f'call {call_id} not found')
-        return call
+from ws_call_manager import WSCallsManager
 
 class PhotoshopInstance:
     SPECIAL_LAYER_NEW_LAYER = '### New Layer ###'
@@ -62,7 +20,7 @@ class PhotoshopInstance:
     
     def __init__(self, ws):
         PhotoshopInstance.instance = self
-        self.wsCallsManager = WSCallsManager(ws)
+        self.wsCallsManager = WSCallsManager(ws, self.message_handler)
         self.destroyed = False
         self.layers = []
         self.reset_change_tracker()
@@ -77,39 +35,23 @@ class PhotoshopInstance:
             finally:
                 await asyncio.sleep(1)
 
+    async def message_handler(self, msg):
+        if msg.type == WSMsgType.TEXT:
+            payload = json.loads(msg.data)
+            if 'push_data' in payload:
+                push_data = payload['push_data']
+                self.push_data.update(push_data)
+                return True
+        return False
+
     async def run_server_loop(self):
         print('Photoshop Connected')
         threading.Thread(target=lambda: asyncio.run(self.poll_layers())).start()
         try:
-            async for msg in self.wsCallsManager.ws:
-                if (self.destroyed): break
-                                                                                                     
-                if msg.type == WSMsgType.TEXT:
-                    payload = json.loads(msg.data)
-                    if 'push_data' in payload:
-                        push_data = payload['push_data']
-                        self.push_data.update(push_data)
-                    elif 'call_id' in payload:
-                        call_id = payload['call_id']
-                        if 'error' in payload:
-                            self.wsCallsManager.handle_call(call_id, error=payload['error'])
-                        elif 'result' in payload:
-                            self.wsCallsManager.handle_call(call_id, result=payload['result'])
-                        else:
-                            await self.wsCallsManager.ws.send_str(json.dumps({ call_id: call_id, 'error': 'result not found in payload'}))
-                    else: 
-                        if 'error' in payload:
-                            print('PS plugin error', payload['error'])
-                        await self.wsCallsManager.ws.send_str(json.dumps({ 'error': 'call_id not found in payload'}))
-                        
-                elif msg.type == WSMsgType.ERROR:
-                    print('ws connection closed with exception %s' % self.wsCallsManager.ws.exception())
-                    
-                else:
-                    await self.wsCallsManager.ws.send_str('invalid msg type')
+            await self.wsCallsManager.message_loop()
         finally:
             print('Photoshop Disconnected')
-            PhotoshopInstance.instance = None
+            await self.destroy()
     
     def get_raw_layers(self):
         return list(map(lambda layer: f"{layer['name']} (id:{layer['id']})", self.layers))
@@ -221,5 +163,8 @@ class PhotoshopInstance:
         self.comfyui_last_value_tracker = {}
             
     async def destroy(self):
-        await self.wsCallsManager.ws.close()
+        if self.destroyed:
+            return
         self.destroyed = True
+        PhotoshopInstance.instance = None
+        await self.wsCallsManager.destroy()
