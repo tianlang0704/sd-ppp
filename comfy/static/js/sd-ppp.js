@@ -11,7 +11,7 @@ app.registerExtension({
 	init() {
 	},
 	async setup() {
-		await api.fetchApi(`/sd-ppp/resetchanges`);
+		await api.fetchApi(`/sd-ppp/init?client_id=${api.clientId}`);
 		setInterval(checkChanges, 1000);
 	},
 	async beforeRegisterNodeDef(nodeType, nodeData, app) {
@@ -75,7 +75,7 @@ async function checkHistoryChanges() {
 		const mode0NodeTypes = currentState.nodes.filter(node => node.mode == 0).map(node => node.type);
 		const containsSDPPPNodes = mode0NodeTypes.some(nodeType => SDPPPNodes.includes(nodeType));
 		if (!containsSDPPPNodes) return;
-		const res = await api.fetchApi(`/sd-ppp/checkchanges`);
+		const res = await api.fetchApi(`/sd-ppp/checkchanges?client_id=${api.clientId}`);
 		const json = await res.json()
 		if (!json.is_changed) return;
 		api.dispatchEvent(new CustomEvent("graphChanged"));	
