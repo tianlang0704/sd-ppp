@@ -42,7 +42,7 @@ class PanelController {
   }
   create() {
     this[_root] = document.createElement("div");
-    this[_root].style.height = "100vh";
+    this[_root].style.height = "130vh";
     this[_root].style.overflow = "auto";
     this[_root].style.padding = "8px";
     react_dom__WEBPACK_IMPORTED_MODULE_0__.render(this[_Component]({
@@ -119,6 +119,15 @@ class Main extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
         _system_HistoryChecker__WEBPACK_IMPORTED_MODULE_2__["default"].instance?.destroy();
       }
     });
+    uxp__WEBPACK_IMPORTED_MODULE_3__.storage.secureStorage.getItem('userId').then(value => {
+      if (!value) return;
+      this.setState({
+        userId: Buffer.from(value).toString()
+      });
+      if (this.state.userId) {
+        console.log('userId:', this.state.userId);
+      }
+    });
     uxp__WEBPACK_IMPORTED_MODULE_3__.storage.secureStorage.getItem('comfyURL').then(value => {
       if (!value) return;
       this.setState({
@@ -131,7 +140,7 @@ class Main extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
     });
   }
   doConnectOrDisconnect() {
-    if (!_system_ComfyConnection__WEBPACK_IMPORTED_MODULE_1__["default"].instance?.isConnected) _system_ComfyConnection__WEBPACK_IMPORTED_MODULE_1__["default"].createInstance(this.state.comfyURL);else _system_ComfyConnection__WEBPACK_IMPORTED_MODULE_1__["default"].instance.disconnect();
+    if (!_system_ComfyConnection__WEBPACK_IMPORTED_MODULE_1__["default"].instance?.isConnected) _system_ComfyConnection__WEBPACK_IMPORTED_MODULE_1__["default"].createInstance(this.state.comfyURL, this.state.userId);else _system_ComfyConnection__WEBPACK_IMPORTED_MODULE_1__["default"].instance.disconnect();
   }
   render() {
     return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("sp-textfield", {
@@ -142,6 +151,15 @@ class Main extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
       },
       value: this.state.comfyURL,
       placeholder: "http://127.0.0.1:8188"
+    }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("sp-textfield", {
+      id: "user-id-bar",
+      label: "USER ID",
+      onInput: ev => {
+        this.state.userId = ev.currentTarget.value;
+        if (!this.state.userId) uxp__WEBPACK_IMPORTED_MODULE_3__.storage.secureStorage.removeItem('userId');else uxp__WEBPACK_IMPORTED_MODULE_3__.storage.secureStorage.setItem('userId', this.state.userId);
+      },
+      value: this.state.userId,
+      placeholder: "User Name: Change if sharing remote server"
     }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
       className: "button-box"
     }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("sp-button", {
@@ -193,22 +211,26 @@ class ComfyConnection {
       }
     });
   }
-  static createInstance(comfyURL) {
+  static createInstance(comfyURL, userId) {
     if (ComfyConnection.instance && ComfyConnection.instance.isConnected) {
       ComfyConnection.instance.disconnect();
     }
-    ComfyConnection.instance = new ComfyConnection(comfyURL);
+    ComfyConnection.instance = new ComfyConnection(comfyURL, userId);
   }
   get isConnected() {
     return this._isConnected === true;
   }
   comfyURL = '';
-  constructor(comfyURL) {
+  constructor(comfyURL, userId) {
     ComfyConnection.instance = this;
     if (!comfyURL) {
       comfyURL = 'http://127.0.0.1:8188';
     }
     this.comfyURL = comfyURL.replace(/\/*$/, '');
+    if (!userId) {
+      userId = '';
+    }
+    this.userId = userId;
     this.connect();
   }
   pushData(data) {
@@ -231,7 +253,7 @@ class ComfyConnection {
       this.reconnectTimer = null;
     }
     // Create WebSocket connection.
-    const socket = this.socket = new WebSocket(this.comfyURL.replace('http://', 'ws://') + '/photoshop_instance?version=1');
+    const socket = this.socket = new WebSocket(this.comfyURL.replace('http://', 'ws://') + '/photoshop_instance?version=1&user_id=' + this.userId);
     socket.addEventListener("open", ev => {
       uxp__WEBPACK_IMPORTED_MODULE_0__.storage.secureStorage.setItem('comfyURL', this.comfyURL);
       console.log('Connection open');
@@ -882,6 +904,9 @@ ___CSS_LOADER_EXPORT___.push([module.id, `.tabbar {
 }
 
 #url-bar {
+    width: 100%;
+}
+#user-id-bar {
     width: 100%;
 }
 .button-box {
