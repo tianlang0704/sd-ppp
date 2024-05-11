@@ -1,8 +1,8 @@
 from server import PromptServer
-from .photoshop_instance import PhotoshopInstance
 from aiohttp import web
 from io import BytesIO
 from .utils import ImageCache
+from .photoshop_manager import PhotoshopManager
 
 @PromptServer.instance.routes.get('/finished_images')
 async def download_handler(request):
@@ -49,35 +49,30 @@ async def websocket_handler(request):
             return web.json_response({ 
                 'error': f'version {version} not supported.',
             })
+    user_id = request.query.get('user_id', 0)
     ip = request.remote
-    instance = PhotoshopInstance.instance(ip)
-    if (instance is not None):
-        print('destroying previous instance')
-        await instance.destroy()
     ws = web.WebSocketResponse()
     await ws.prepare(request)
-    
-    instance = PhotoshopInstance(ws=ws, id=ip)
+    instance = await PhotoshopManager.instance().new_ps_instance(ws, ip, user_id)
     await instance.run_server_loop()
 
 @PromptServer.instance.routes.get("/sd-ppp/checkchanges")
 async def check_changes(request):
     ip = request.remote
     client_id = request.query.get('client_id', None)
-    if client_id is not None:
-        PhotoshopInstance.add_client_id(ip, client_id)
+    user_id = request.query.get('user_id', 0)
     is_changed = False
-    if (PhotoshopInstance.instance(ip) is not None):
-        is_changed = await PhotoshopInstance.instance(ip).is_ps_history_changed()
+    instance = PhotoshopManager.instance().instance_from_client_info(ip, client_id, user_id)
+    if (instance is not None):
+        is_changed = await instance.is_ps_history_changed()
     return web.json_response({'is_changed': is_changed}, content_type='application/json')
 
 @PromptServer.instance.routes.get("/sd-ppp/init")
 async def reset_changes(request):
     ip = request.remote
     client_id = request.query.get('client_id', None)
-    if client_id is not None:
-        PhotoshopInstance.add_client_id(ip, client_id)
-    intance = PhotoshopInstance.instance(ip)
+    user_id = request.query.get('user_id', 0)
+    intance = PhotoshopManager.instance().instance_from_client_info(ip, client_id, user_id)
     if (intance is not None):
         intance.reset_change_tracker()
     return web.json_response({}, content_type='application/json')
@@ -85,10 +80,12 @@ async def reset_changes(request):
 @PromptServer.instance.routes.get("/sd-ppp/getlayers")
 async def get_layers(request):
     ip = request.remote
+    client_id = request.query.get('client_id', 0)
+    user_id = request.query.get('user_id', 0)
     layer_strs = []
     bounds_strs = []
     set_layer_strs = []
-    instance = PhotoshopInstance.instance(ip)
+    instance = PhotoshopManager.instance().instance_from_client_info(ip, client_id, user_id)
     if (instance is not None):
         layer_strs = instance.get_base_layers()
         bounds_strs = instance.get_bounds_layers()

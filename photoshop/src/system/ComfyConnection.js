@@ -19,11 +19,11 @@ export default class ComfyConnection {
         });
     }
 
-    static createInstance(comfyURL) {
+    static createInstance(comfyURL, userId) {
         if (ComfyConnection.instance && ComfyConnection.instance.isConnected) {
             ComfyConnection.instance.disconnect();
         }
-        ComfyConnection.instance = new ComfyConnection(comfyURL);
+        ComfyConnection.instance = new ComfyConnection(comfyURL, userId);
     }
 
     get isConnected() {
@@ -31,12 +31,16 @@ export default class ComfyConnection {
     }
 
     comfyURL = '';
-    constructor(comfyURL) {
+    constructor(comfyURL, userId) {
         ComfyConnection.instance = this;
         if (!comfyURL) {
             comfyURL = 'http://127.0.0.1:8188';
         }
         this.comfyURL = comfyURL.replace(/\/*$/, '');
+        if (!userId) {
+            userId = '';
+        }
+        this.userId = userId;
         this.connect();
     }
 
@@ -59,7 +63,7 @@ export default class ComfyConnection {
             this.reconnectTimer = null;
         }
         // Create WebSocket connection.
-        const socket = this.socket = new WebSocket(this.comfyURL.replace('http://', 'ws://') + '/photoshop_instance?version=1');
+        const socket = this.socket = new WebSocket(this.comfyURL.replace('http://', 'ws://') + '/photoshop_instance?version=1&user_id=' + this.userId);
 
         socket.addEventListener("open", (ev) => {
             storage.secureStorage.setItem('comfyURL', this.comfyURL);

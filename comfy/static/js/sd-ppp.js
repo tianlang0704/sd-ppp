@@ -1,18 +1,49 @@
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js"
 
+let DEFAULT_USER_ID = "Change if sharing remote server"
+
 let layerStrs = [];
 let boundsStrs = [];
 let setLayerStrs = [];
-
 console.log("[sd-ppp]", "Loading js extension");
+
+function getUserId() {
+	let userId = app.ui.settings.getSettingValue("SD-PPP.userId");
+	if (!userId || userId == DEFAULT_USER_ID) {
+		userId = "";
+	}
+	return userId;
+}
+
 app.registerExtension({
 	name: "Comfy.SD-PPP",
 	init() {
 	},
 	async setup() {
-		await api.fetchApi(`/sd-ppp/init?client_id=${api.clientId}`);
+		// init for backend
+		await api.fetchApi(`/sd-ppp/init?client_id=${api.clientId}&user_id=${getUserId()}`);
+		// set change query loop
 		setInterval(checkChanges, 1000);
+		// add setting for using remote server
+		const emptyValue = app.multiUserServer ? user : DEFAULT_USER_ID
+		app.ui.settings.addSetting({
+			id: "SD-PPP.userId",
+			name: "SD-PPP: User ID",
+			defaultValue: emptyValue,
+			onChange: async (value, oldValue) => {
+				if (!value) {
+					setTimeout(() => {
+						app.ui.settings.setSettingValue("SD-PPP.userId", emptyValue);
+						const input = document.querySelector("#SD-PPP-userId")
+						if (input) {
+							input.value = emptyValue;
+						}
+					}, 0.01);;
+				}
+			},
+			type: "text",
+		});
 	},
 	async beforeRegisterNodeDef(nodeType, nodeData, app) {
 		if (nodeType.comfyClass === 'Get Image From Photoshop Layer') {
@@ -59,7 +90,7 @@ async function checkChanges() {
 
 async function refreshLayers() {
 	try {
-		const res = await api.fetchApi(`/sd-ppp/getlayers`);
+		const res = await api.fetchApi(`/sd-ppp/getlayers?client_id=${api.clientId}&user_id=${getUserId()}`);
 		const json = await res.json()
 		layerStrs = json.layer_strs;
 		boundsStrs = json.bounds_strs;
@@ -75,7 +106,7 @@ async function checkHistoryChanges() {
 		const mode0NodeTypes = currentState.nodes.filter(node => node.mode == 0).map(node => node.type);
 		const containsSDPPPNodes = mode0NodeTypes.some(nodeType => SDPPPNodes.includes(nodeType));
 		if (!containsSDPPPNodes) return;
-		const res = await api.fetchApi(`/sd-ppp/checkchanges?client_id=${api.clientId}`);
+		const res = await api.fetchApi(`/sd-ppp/checkchanges?client_id=${api.clientId}&user_id=${getUserId()}`);
 		const json = await res.json()
 		if (!json.is_changed) return;
 		api.dispatchEvent(new CustomEvent("graphChanged"));	

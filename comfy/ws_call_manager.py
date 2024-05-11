@@ -47,7 +47,7 @@ class WSCallsManager:
         async for msg in self.ws:
             if self.destroyed: break
             if self.message_handler is not None and await self.message_handler(msg):
-                return
+                continue
             if msg.type == WSMsgType.TEXT:
                 payload = json.loads(msg.data)
                 if 'call_id' in payload:
