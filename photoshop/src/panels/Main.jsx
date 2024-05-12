@@ -53,6 +53,7 @@ export default class Main extends React.Component {
     render() {
         return (
             <> 
+
                 <sp-textfield 
                     id="url-bar" 
                     label="ComfyURL" 

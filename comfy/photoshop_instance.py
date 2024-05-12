@@ -16,8 +16,8 @@ class PhotoshopInstance:
         SPECIAL_LAYER_SAME_AS_LAYER: -3
     }
     
-    def __init__(self, ws, id = 0):
-        self.id = id
+    def __init__(self, ws, uid = 0):
+        self.uid = uid
         self.wsCallsManager = WSCallsManager(ws, self.message_handler)
         self.destroyed = False
         self.layers = []
@@ -102,6 +102,7 @@ class PhotoshopInstance:
     def update_comfyui_last_value(self, layer, use_layer_bounds, value):
         layer_bounds_combo = f"{layer}{use_layer_bounds}"
         self.comfyui_last_value_tracker[layer_bounds_combo] = value
+        return value
     
     # need to update history id after internal operation otherwise it might cause infinite change loop
     async def update_history_state_id_after_internal_change(self, history_state_id=None):
