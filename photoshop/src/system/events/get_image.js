@@ -119,9 +119,9 @@ function getDesiredBounds(boundsLayerID) {
     return desireBounds
 }
 
-export default async function get_image(params) {
-    const layerID = params.layer_id
-    const boundsLayerID = params.use_layer_bounds
+export default async function get_image(payload) {
+    const layerID = payload.params.layer_id;
+    const boundsLayerID = payload.params.use_layer_bounds;
     let uploadName = 0;
     let layerOpacity = 100;
 
@@ -141,8 +141,8 @@ export default async function get_image(params) {
             [layer, isFolder] = await findLayer(layerID);
             layerOpacity = layer?.opacity ?? 100;
             const desireBounds = getDesiredBounds(boundsLayerID);
-            const pixelDataFromAPI = await getPixelsData(layer, desireBounds)
-            const pixelDataForReturn = padAndTrimLayerDataToDesireBounds(layer, pixelDataFromAPI, desireBounds)
+            const pixelDataFromAPI = await getPixelsData(layer, desireBounds);
+            const pixelDataForReturn = padAndTrimLayerDataToDesireBounds(layer, pixelDataFromAPI, desireBounds);
             // console.log('getPixels', Date.now() - startTime, 'ms');
             // log desire size
             const image = await new Promise((resolve, reject) => {
