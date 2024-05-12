@@ -1,6 +1,7 @@
-import { executeAsModalUntilSuccess } from '../util.js'
 import { app, imaging } from "photoshop";
-import Jimp from "../library/jimp.min.js";
+import { executeAsModalUntilSuccess} from '../util.js';
+import Jimp from "../library/jimp.min";
+
 import { SPECIAL_LAYER_NAME_TO_ID, SPECIAL_LAYER_NEW_LAYER } from '../util.js';
 
 function autocrop(jimp) {
@@ -9,7 +10,7 @@ function autocrop(jimp) {
     let maxX = 0;
     let maxY = 0;
 
-    jimp.scan(0, 0, jimp.bitmap.width, jimp.bitmap.height, function (x, y, idx) {
+    jimp.scan(0, 0, jimp.bitmap.width, jimp.bitmap.height, function(x, y, idx) {
         const alpha = this.bitmap.data[idx + 3];
         if (alpha !== 0) {
             minX = Math.min(minX, x);

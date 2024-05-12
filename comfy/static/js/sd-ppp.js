@@ -1,12 +1,13 @@
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js"
 
-let DEFAULT_USER_ID = "Change if sharing remote server"
 
 let layerStrs = [];
 let boundsStrs = [];
 let setLayerStrs = [];
 console.log("[sd-ppp]", "Loading js extension");
+
+const DEFAULT_USER_ID = "Change if sharing remote server"
 
 function getUserId() {
 	let userId = app.ui.settings.getSettingValue("SD-PPP.userId");
@@ -26,7 +27,8 @@ app.registerExtension({
 		// set change query loop
 		setInterval(checkChanges, 1000);
 		// add setting for using remote server
-		const emptyValue = app.multiUserServer ? user : DEFAULT_USER_ID
+		const userName = localStorage["Comfy.userName"];
+		const emptyValue = app.multiUserServer ? userName : DEFAULT_USER_ID
 		app.ui.settings.addSetting({
 			id: "SD-PPP.userId",
 			name: "SD-PPP: User ID",
@@ -35,10 +37,10 @@ app.registerExtension({
 				if (!value) {
 					setTimeout(() => {
 						app.ui.settings.setSettingValue("SD-PPP.userId", emptyValue);
+						if (!app.multiUserServer) return;
+						// Change empty text box to user name immediately when in multi-user mode, it's recommanded in multi-user environment
 						const input = document.querySelector("#SD-PPP-userId")
-						if (input) {
-							input.value = emptyValue;
-						}
+						if (input) input.value = emptyValue;
 					}, 0.01);;
 				}
 			},
@@ -81,7 +83,7 @@ app.registerExtension({
 
 const SDPPPNodes = [
 	'Get Image From Photoshop Layer',
-    'Send Images To Photoshop'
+    'Send Images To Photoshop',
 ]
 async function checkChanges() {
 	await checkHistoryChanges();

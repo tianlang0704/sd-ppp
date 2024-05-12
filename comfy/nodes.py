@@ -9,33 +9,26 @@ prompt_server = PromptServer.instance
 class GetImageFromPhotoshopLayerNode:
     # !!!!do not validate because there's no client_id when validating, so we validate manually before execution!!!!
     # @classmethod
-    # def VALIDATE_INPUTS(layer, use_layer_bounds):
-    #     if (PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id) is None):
-    #         return 'Photoshop is not connected'
-    #     return True
+    # def VALIDATE_INPUTS():
+    #    pass
     
     @classmethod
     def IS_CHANGED(self, layer, use_layer_bounds):
-        psInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
-        if (psInstance is None):
+        photoshopInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
+        if not photoshopInstance:
             return np.random.rand()
         else:
-            id = psInstance.layer_name_to_id(layer)
-            bounds_id = psInstance.layer_name_to_id(use_layer_bounds, id)
-            is_changed, history_state_id = asyncio.run(psInstance.check_layer_bounds_combo_changed(id, bounds_id))
+            id = photoshopInstance.layer_name_to_id(layer)
+            bounds_id = photoshopInstance.layer_name_to_id(use_layer_bounds, id)
+            is_changed, history_state_id = asyncio.run(photoshopInstance.check_layer_bounds_combo_changed(id, bounds_id))
             if is_changed and history_state_id is None:
-                return np.random.rand()
-            psInstance.update_comfyui_last_value(id, bounds_id, history_state_id)
-            return history_state_id
+                return photoshopInstance.update_comfyui_last_value(id, bounds_id, np.random.rand())
+            return photoshopInstance.update_comfyui_last_value(id, bounds_id, history_state_id)
     
     @classmethod
     def INPUT_TYPES(cls):
         layer_strs = []
         bounds_strs = []
-        psInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
-        if (psInstance is not None):
-            layer_strs = psInstance.get_base_layers()
-            bounds_strs = psInstance.get_bounds_layers()
         return {
             "required":{},
             "optional": {
@@ -50,20 +43,20 @@ class GetImageFromPhotoshopLayerNode:
     CATEGORY = "Photoshop"
 
     def get_image(self, layer, use_layer_bounds):
-        psInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
-        if (psInstance is None):
+        photoshopInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
+        if not photoshopInstance:
             raise ValueError('Photoshop is not connected')
-        layer_strs = psInstance.get_base_layers()
+        layer_strs = photoshopInstance.get_base_layers()
         if layer not in layer_strs:
             raise ValueError(f"Layer {layer} not found in Photoshop")
-        bounds_strs = psInstance.get_bounds_layers()
+        bounds_strs = photoshopInstance.get_bounds_layers()
         if use_layer_bounds not in bounds_strs:
             raise ValueError(f"Layer {use_layer_bounds} not found in Photoshop")
 
-        id = psInstance.layer_name_to_id(layer)
-        bounds_id = psInstance.layer_name_to_id(use_layer_bounds, id)
+        id = photoshopInstance.layer_name_to_id(layer)
+        bounds_id = photoshopInstance.layer_name_to_id(use_layer_bounds, id)
         
-        image_id, layer_opacity = _invoke_async(psInstance.get_image(layer_id=id, bounds_id=bounds_id))
+        image_id, layer_opacity = _invoke_async(photoshopInstance.get_image(layer_id=id, bounds_id=bounds_id))
         
         loadImage = LoadImage()
         (output_image, output_mask) = loadImage.load_image(image_id)
@@ -73,16 +66,12 @@ class SendImageToPhotoshopLayerNode:
     # !!!!do not validate because there's no client_id when validating, so we validate manually before execution!!!!
     # @classmethod
     # def VALIDATE_INPUTS():
-    #     if (PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id) is None):
-    #         return 'Photoshop is not connected'
-    #     return True
+    #    pass
     
     @classmethod
     def INPUT_TYPES(cls):
         layer_strs = []
-        psInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
-        if (psInstance is not None):
-            layer_strs = psInstance.get_set_layers()
+
         return {
             "required":{},
             "optional": {
@@ -97,14 +86,14 @@ class SendImageToPhotoshopLayerNode:
     OUTPUT_NODE = True
 
     def send_image(self, images, layer):
-        psInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
-        if (psInstance is None):
+        photoshopInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
+        if (photoshopInstance is None):
             raise ValueError('Photoshop is not connected')
         
         ret = cache_images(images)
         
-        layer_id = psInstance.layer_name_to_id(layer)
-        threading.Thread(target=lambda: asyncio.run(psInstance.send_images(image_ids=ret, layer_id=layer_id))).start()
+        layer_id = photoshopInstance.layer_name_to_id(layer)
+        threading.Thread(target=lambda: asyncio.run(photoshopInstance.send_images(image_ids=ret, layer_id=layer_id))).start()
         return (None,)
     
 class ImageTimesOpacity:

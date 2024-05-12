@@ -22,8 +22,9 @@ class PhotoshopManager:
 
     # get instance from client information, match new instance if not exist
     def instance_from_client_info(self, ip, client_id, user_id) -> PhotoshopInstance:
-        if not client_id:
-            user_id = 0
+        if not ip: return None
+        if not client_id: user_id = 0
+        if not user_id: user_id = 0
         instance = self.instance_from_client_id(client_id)
         if instance is not None:
             return instance
@@ -37,15 +38,15 @@ class PhotoshopManager:
 
     # create new instance and record
     async def new_ps_instance(self, ws, ip, user_id) -> PhotoshopInstance:
-        if not user_id:
-            user_id = 0
+        if not ip: return None
+        if not user_id: user_id = 0
         # create new instance
         instance = PhotoshopInstance(ws, user_id)
         instance.on_destroy = self._on_instance_destroy
         # record new instance
         await self._add_new_ps_instance(ip, instance)
-        return instance        
-    
+        return instance
+
     #------------------------------------------------------------------------------------------------------------------------------------------------
     # callback when instance is destroyed and remove from record
     def _on_instance_destroy(self, instance):
@@ -56,7 +57,7 @@ class PhotoshopManager:
         # find old one and destroy
         same_ip_list = self.ip_to_ps_instance_list.get(ip, [])
         for check_instance in same_ip_list:
-            if check_instance.id == instance.id:
+            if check_instance.uid == instance.uid:
                 await check_instance.destroy()
         # record ip to instance
         ps_instance_list = self.ip_to_ps_instance_list.get(ip, [])
@@ -94,7 +95,7 @@ class PhotoshopManager:
             self.client_id_to_ps_instance[client_id] = ps_instance_list[0]
             return
         # if more than one same ip ps instance, check same user_id, same ip + same user id = same ps instance
-        ps_user_id_list = [instance.id for instance in ps_instance_list]
+        ps_user_id_list = [instance.uid for instance in ps_instance_list]
         try:
             check_index = ps_user_id_list.index(user_id)
         except:
@@ -113,5 +114,3 @@ class PhotoshopManager:
             check_instance = self.client_id_to_ps_instance.get(client_id, None)
             if check_instance == instance:
                 self.client_id_to_ps_instance.pop(client_id, None)
-        
-
