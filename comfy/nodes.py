@@ -6,6 +6,7 @@ from .utils import cache_images
 from server import PromptServer
 from .photoshop_manager import PhotoshopManager
 prompt_server = PromptServer.instance
+
 class GetImageFromPhotoshopLayerNode:
     # !!!!do not validate because there's no client_id when validating, so we validate manually before execution!!!!
     # @classmethod
@@ -13,27 +14,32 @@ class GetImageFromPhotoshopLayerNode:
     #    pass
     
     @classmethod
-    def IS_CHANGED(self, layer, use_layer_bounds):
+    def IS_CHANGED(self, document, layer, use_layer_bounds):
         photoshopInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
         if not photoshopInstance:
             return np.random.rand()
         else:
-            id = photoshopInstance.layer_name_to_id(layer)
-            bounds_id = photoshopInstance.layer_name_to_id(use_layer_bounds, id)
-            is_changed, history_state_id = asyncio.run(photoshopInstance.check_layer_bounds_combo_changed(id, bounds_id))
-            if is_changed and history_state_id is None:
-                return photoshopInstance.update_comfyui_last_value(id, bounds_id, np.random.rand())
-            return photoshopInstance.update_comfyui_last_value(id, bounds_id, history_state_id)
+            document_id = photoshopInstance.document_name_to_id(document)
+            layer_id = photoshopInstance.layer_name_to_id(layer)
+            bounds_id = photoshopInstance.layer_name_to_id(use_layer_bounds, layer_id)
+            is_changed, history_state_id = asyncio.run(photoshopInstance.check_document_changed(document_id))
+            if is_changed:
+                if history_state_id:
+                    comfyui_tracking_value = photoshopInstance.update_comfyui_last_value(layer_id, bounds_id, history_state_id)
+                else:
+                    comfyui_tracking_value = photoshopInstance.update_comfyui_last_value(layer_id, bounds_id, np.random.rand())
+            else:
+                comfyui_tracking_value = photoshopInstance.get_comfyui_last_value(layer_id, bounds_id) or history_state_id
+            return comfyui_tracking_value
     
     @classmethod
     def INPUT_TYPES(cls):
-        layer_strs = []
-        bounds_strs = []
         return {
             "required":{},
             "optional": {
-                "layer": (layer_strs, {"default": layer_strs[0] if len(layer_strs) > 0 else None}),
-                "use_layer_bounds": (bounds_strs, {"default": bounds_strs[0] if len(bounds_strs) > 0 else None}),
+                "document": ([], {"default": "### Connect to PS first ###"}),
+                "layer": ([], {"default": None}),
+                "use_layer_bounds": ([], {"default": None}),
             }
         }
 
@@ -42,21 +48,27 @@ class GetImageFromPhotoshopLayerNode:
     FUNCTION = "get_image"
     CATEGORY = "Photoshop"
 
-    def get_image(self, layer, use_layer_bounds):
+    def get_image(self, document, layer, use_layer_bounds):
         photoshopInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
         if not photoshopInstance:
             raise ValueError('Photoshop is not connected')
-        layer_strs = photoshopInstance.get_base_layers()
+        doc_strs = photoshopInstance.get_documents()
+        if document not in doc_strs:
+            raise ValueError(f"Document {document} not found in Photoshop")
+        document_id = photoshopInstance.document_name_to_id(document)
+        layer_strs = photoshopInstance.get_base_layers(document_id=document_id)
         if layer not in layer_strs:
             raise ValueError(f"Layer {layer} not found in Photoshop")
-        bounds_strs = photoshopInstance.get_bounds_layers()
+        bounds_strs = photoshopInstance.get_bounds_layers(document_id=document_id)
         if use_layer_bounds not in bounds_strs:
             raise ValueError(f"Layer {use_layer_bounds} not found in Photoshop")
 
-        id = photoshopInstance.layer_name_to_id(layer)
-        bounds_id = photoshopInstance.layer_name_to_id(use_layer_bounds, id)
+        layer_id = photoshopInstance.layer_name_to_id(layer)
+        bounds_id = photoshopInstance.layer_name_to_id(use_layer_bounds, layer_id)
         
-        image_id, layer_opacity = _invoke_async(photoshopInstance.get_image(layer_id=id, bounds_id=bounds_id))
+        image_id, layer_opacity = _invoke_async(photoshopInstance.get_image(document_id=document_id, layer_id=layer_id, bounds_id=bounds_id))
+        if not image_id:
+            raise ValueError(f"Failed getting image from photoshop, please check log")
         
         loadImage = LoadImage()
         (output_image, output_mask) = loadImage.load_image(image_id)
@@ -70,13 +82,13 @@ class SendImageToPhotoshopLayerNode:
     
     @classmethod
     def INPUT_TYPES(cls):
-        layer_strs = []
 
         return {
             "required":{},
             "optional": {
+                "document": ([], {"default": "### Connect to PS first ###"}),
                 "images": ("IMAGE", ),
-                "layer": (layer_strs, {"default": layer_strs[0] if len(layer_strs) > 0 else None}),
+                "layer": ([], {"default": None}),
             }
         }
 
@@ -85,15 +97,19 @@ class SendImageToPhotoshopLayerNode:
     CATEGORY = "Photoshop"
     OUTPUT_NODE = True
 
-    def send_image(self, images, layer):
+    def send_image(self, document, images, layer):
         photoshopInstance = PhotoshopManager.instance().instance_from_client_id(prompt_server.client_id)
         if (photoshopInstance is None):
             raise ValueError('Photoshop is not connected')
+        doc_strs = photoshopInstance.get_documents()
+        if document not in doc_strs:
+            raise ValueError(f"Document {document} not found in Photoshop")
         
         ret = cache_images(images)
         
+        document_id = photoshopInstance.document_name_to_id(document)
         layer_id = photoshopInstance.layer_name_to_id(layer)
-        threading.Thread(target=lambda: asyncio.run(photoshopInstance.send_images(image_ids=ret, layer_id=layer_id))).start()
+        threading.Thread(target=lambda: asyncio.run(photoshopInstance.send_images(document_id=document_id, image_ids=ret, layer_id=layer_id))).start()
         return (None,)
     
 class ImageTimesOpacity:

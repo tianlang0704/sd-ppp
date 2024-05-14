@@ -56,15 +56,17 @@ async def websocket_handler(request):
     instance = await PhotoshopManager.instance().new_ps_instance(ws, ip, user_id)
     await instance.run_server_loop()
 
-@PromptServer.instance.routes.get("/sd-ppp/checkchanges")
+@PromptServer.instance.routes.post("/sd-ppp/checkchanges")
 async def check_changes(request):
     ip = request.remote
     client_id = request.query.get('client_id', None)
     user_id = request.query.get('user_id', 0)
+    data = await request.json()
+    document_str_list = data.get('document_str_list', [])
     is_changed = False
     instance = PhotoshopManager.instance().instance_from_client_info(ip, client_id, user_id)
     if (instance is not None):
-        is_changed = await instance.is_ps_history_changed()
+        is_changed = await instance.is_ps_history_changed(document_str_list)
     return web.json_response({'is_changed': is_changed}, content_type='application/json')
 
 @PromptServer.instance.routes.get("/sd-ppp/init")
@@ -77,21 +79,23 @@ async def reset_changes(request):
         intance.reset_change_tracker()
     return web.json_response({}, content_type='application/json')
 
-@PromptServer.instance.routes.get("/sd-ppp/getlayers")
+@PromptServer.instance.routes.post("/sd-ppp/getlayers")
 async def get_layers(request):
     ip = request.remote
     client_id = request.query.get('client_id', 0)
     user_id = request.query.get('user_id', 0)
-    layer_strs = []
-    bounds_strs = []
-    set_layer_strs = []
+    now = request.query.get('now', False)
+    data = await request.json()
+    document_str_list = data.get('document_str_list', [])
+    doc_strs = []
+    docs_layers_strs = []
     instance = PhotoshopManager.instance().instance_from_client_info(ip, client_id, user_id)
     if (instance is not None):
-        layer_strs = instance.get_base_layers()
-        bounds_strs = instance.get_bounds_layers()
-        set_layer_strs = instance.get_set_layers()
+        instance.set_document_name_list_to_sync_layers(document_str_list)
+        await instance.sync_layers(now)
+        doc_strs = instance.get_documents()
+        docs_layers_strs = instance.get_docs_layer_strs(document_str_list)
     return web.json_response({
-        'layer_strs': layer_strs, 
-        'bounds_strs': bounds_strs, 
-        'set_layer_strs': set_layer_strs,
+        'doc_strs': doc_strs,
+        'docs_layers_strs': docs_layers_strs, 
     }, content_type='application/json')
