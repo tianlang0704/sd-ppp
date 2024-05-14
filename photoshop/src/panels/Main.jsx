@@ -19,8 +19,8 @@ export default class Main extends React.Component {
             })
             if (instance?.isConnected) {
                 const hc = HistoryChecker.createInstance();
-                hc.setChangeCallback((historyId) => {
-                    instance.pushData({history_state_id: historyId})
+                hc.setChangeCallback((docIdToHistoryStateId) => {
+                    instance.pushData({history_state_id: docIdToHistoryStateId})
                 });
             } else {
                 HistoryChecker.instance?.destroy();

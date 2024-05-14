@@ -1,5 +1,5 @@
-import { app, imaging } from "photoshop";
-import { executeAsModalUntilSuccess} from '../util.js';
+import { imaging } from "photoshop";
+import { executeAsModalUntilSuccess, findDocument } from '../util.js';
 import Jimp from "../library/jimp.min";
 
 import { SPECIAL_LAYER_NAME_TO_ID, SPECIAL_LAYER_NEW_LAYER } from '../util.js';
@@ -27,9 +27,17 @@ function autocrop(jimp) {
 }
 
 export default async function send_images(payload) {
+    const documentId = payload.params.document_id
     const imageIds = payload.params.image_ids
     const layerId = payload.params.layer_id
+    let targetDocument = undefined;
     console.log("send_images layerId: ", layerId)
+    try {
+        targetDocument = findDocument(documentId);
+    }catch(e){
+        console.error(e.message)
+        throw e;
+    }
     await Promise.all(
         imageIds.map(async imageId => {
             let layer;
@@ -37,7 +45,7 @@ export default async function send_images(payload) {
             let newLayerName;
             await executeAsModalUntilSuccess(async () => {
                 if (layerId && layerId != SPECIAL_LAYER_NAME_TO_ID[SPECIAL_LAYER_NEW_LAYER]) {
-                    layer = await app.activeDocument.layers.find(l => l.id == layerId)
+                    layer = await targetDocument.layers.find(l => l.id == layerId)
                     // deal with multiple images
                     let imageIndexSuffix = ""
                     console.log("imageIds.length: ", imageIds.length)
@@ -51,14 +59,14 @@ export default async function send_images(payload) {
                         const layerName = layer?.name;
                         existingLayerName = layerName + imageIndexSuffix
                         console.log("existingLayerName: ", existingLayerName)
-                        layer = await app.activeDocument.layers.find(l => l.name == existingLayerName)
+                        layer = await targetDocument.layers.find(l => l.name == existingLayerName)
                     }
                 }
                 // deal with new layer or id/name not found layer
                 if (!layer) {
                     newLayerName = existingLayerName ?? 'Comfy Images ' + imageId
                     console.log("newLayerName: ", newLayerName)
-                    layer = await app.activeDocument.createLayer("pixel", {
+                    layer = await targetDocument.createLayer("pixel", {
                         name: newLayerName
                     })
                 }

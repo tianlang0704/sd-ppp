@@ -1,4 +1,5 @@
-import {app, action} from "photoshop";
+import { app, action } from "photoshop";
+import { getLastHistoryState } from "./util";
 
 class HistoryChecker {
     static instance = null;
@@ -10,7 +11,7 @@ class HistoryChecker {
     }
     constructor() {
         HistoryChecker.instance = this;
-        this.lastCheckId = -1;
+        this.lastCheckId = {};
         this.changeCallback = null;
         action.addNotificationListener(["historyStateChanged"], () => {
             this.checkHistoryState();
@@ -29,14 +30,23 @@ class HistoryChecker {
     }
 
     checkHistoryState() {
-        const historyStates = app.activeDocument?.historyStates;
-        if (!historyStates || historyStates.length == 0) return;
-        const historyState = historyStates[historyStates.length - 1];
-        const historyId = historyState.id;
-        if (this.lastCheckId == historyId) return;
-        this.lastCheckId = historyId;
+        console.log('checkHistoryState', app.documents?.length)
+        let changedDocIdToHistoryId = {};
+        app.documents?.forEach(doc => {
+            const historyState = getLastHistoryState(doc);
+            console.log('checkHistoryState historyState:', historyState?.id, 'doc.id:', historyState?.docId)
+            if (!historyState) return;
+            const oldHistoryStateId = this.lastCheckId[doc.id];
+            console.log('checkHistoryState oldHistoryStateId:', oldHistoryStateId)
+            if (oldHistoryStateId == historyState.id) return;
+            changedDocIdToHistoryId[doc.id] = historyState.id;
+            this.lastCheckId[doc.id] = historyState.id;
+        });
+        console.log('checkHistoryState changedDocIdToHistoryId:', changedDocIdToHistoryId)
+        if (Object.keys(changedDocIdToHistoryId).length == 0) return;
+        console.log('changedDocIdToHistoryId:', changedDocIdToHistoryId)
         if (this.changeCallback) 
-            this.changeCallback(historyId);
+            this.changeCallback(changedDocIdToHistoryId);
     }
 }
 

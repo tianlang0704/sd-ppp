@@ -1,14 +1,30 @@
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js"
 
-
-let layerStrs = [];
-let boundsStrs = [];
-let setLayerStrs = [];
 console.log("[sd-ppp]", "Loading js extension");
 
 const DEFAULT_USER_ID = "Change if sharing remote server"
 
+let docStrs = [];
+let docsLayerStrs = {};
+let getDocWidgetList = [];
+let sendDocWidgetList = [];
+function addDocWidget(list, docWidget) {
+	list.push(docWidget);
+}
+function removeDocWidget(list, docWidget) {
+	const index = list.indexOf(docWidget);
+	if (index == -1) return;
+	list.splice(index, 1);
+}
+function getDocWidgetStrs(...args) {
+	let docWidgetList = [];
+	for (let list of args) {
+		docWidgetList = docWidgetList.concat(list);
+	}
+	let docWidgetStrs = docWidgetList.map(docWidget => docWidget.value);
+	return [...new Set(docWidgetStrs)];
+}
 function getUserId() {
 	let userId = app.ui.settings.getSettingValue("SD-PPP.userId");
 	if (!userId || userId == DEFAULT_USER_ID) {
@@ -16,7 +32,6 @@ function getUserId() {
 	}
 	return userId;
 }
-
 app.registerExtension({
 	name: "Comfy.SD-PPP",
 	init() {
@@ -25,7 +40,7 @@ app.registerExtension({
 		// init for backend
 		await api.fetchApi(`/sd-ppp/init?client_id=${api.clientId}&user_id=${getUserId()}`);
 		// set change query loop
-		setInterval(checkChanges, 1000);
+		setInterval(checkChanges, 2000);
 		// add setting for using remote server
 		const userName = localStorage["Comfy.userName"];
 		const emptyValue = app.multiUserServer ? userName : DEFAULT_USER_ID
@@ -49,33 +64,67 @@ app.registerExtension({
 	},
 	async beforeRegisterNodeDef(nodeType, nodeData, app) {
 		if (nodeType.comfyClass === 'Get Image From Photoshop Layer') {
-			const onSelected = nodeType.prototype.onSelected;
-			const onMouseEnter = nodeType.prototype.onMouseEnter;
 			let this_handler = function() {
-				this.widgets[0].options.values = layerStrs;
-				this.widgets[1].options.values = boundsStrs;
+				const docWidget = this.widgets[0];
+				docWidget.options.values = docStrs;
+				const docValue = docWidget.value;
+				this.widgets[1].options.values = docsLayerStrs[docValue]?.layer_strs || [];
+				this.widgets[2].options.values = docsLayerStrs[docValue]?.bounds_strs || [];
 			}
-			nodeType.prototype.onSelected = async function(...args) {
-				if(onSelected) await onSelected.call(this, ...args);
+			const onMouseUp = nodeType.prototype.onMouseUp;
+			nodeType.prototype.onMouseUp = async function(...args) {
+				if(onMouseUp) await onMouseUp.call(this, ...args);
 				this_handler.call(this);
 			}
+			const onMouseEnter = nodeType.prototype.onMouseEnter;
 			nodeType.prototype.onMouseEnter = async function(...args) {
 				if(onMouseEnter) await onMouseEnter.call(this, ...args);
 				this_handler.call(this);
+			}
+			const onConfigure = nodeType.prototype.onConfigure;
+			nodeType.prototype.onConfigure = async function(info) {
+				if(onConfigure) await onConfigure.call(this, ...args);
+				addDocWidget(getDocWidgetList, this.widgets[0]);
+				const outter_this = this;
+				this.widgets[0].callback = async function() {
+					this_handler.call(outter_this);
+				}
+			}
+			const onRemove = nodeType.prototype.onRemove;
+			nodeType.prototype.onRemove = async function(info) {
+				if (onRemove) await onRemove.call(this, ...args);
+				removeDocWidget(getDocWidgetList, this.widgets[0]);
 			}
 		} else if (nodeType.comfyClass === 'Send Images To Photoshop') {
-			const onSelected = nodeType.prototype.onSelected;
-			const onMouseEnter = nodeType.prototype.onMouseEnter;
 			let this_handler = function() {
-				this.widgets[0].options.values = setLayerStrs;
+				const docWidget = this.widgets[0];
+				docWidget.options.values = docStrs;
+				const docValue = docWidget.value;
+				this.widgets[1].options.values = docsLayerStrs[docValue]?.set_layer_strs || [];
 			}
-			nodeType.prototype.onSelected = async function(...args) {
-				if(onSelected) await onSelected.call(this, ...args);
+			const onMouseUp = nodeType.prototype.onMouseUp;
+			nodeType.prototype.onMouseUp = async function(...args) {
+				if(onMouseUp) await onMouseUp.call(this, ...args);
 				this_handler.call(this);
 			}
+			const onMouseEnter = nodeType.prototype.onMouseEnter;
 			nodeType.prototype.onMouseEnter = async function(...args) {
 				if(onMouseEnter) await onMouseEnter.call(this, ...args);
 				this_handler.call(this);
+			}
+			const onConfigure = nodeType.prototype.onConfigure;
+			nodeType.prototype.onConfigure = async function(...args) {
+				if(onConfigure) await onConfigure.call(this, ...args);
+				addDocWidget(sendDocWidgetList, this.widgets[0]);
+				const outter_this = this;
+				this.widgets[0].callback = async function() {
+					this_handler.call(outter_this);
+				}
+			}
+			const onRemove = nodeType.prototype.onRemove;
+			nodeType.prototype.onRemove = async function(...args) {
+				if (onRemove) await onRemove.call(this, ...args);
+				removeDocWidget(sendDocWidgetList, this.widgets[0]);
 			}
 		}
 	}
@@ -92,11 +141,23 @@ async function checkChanges() {
 
 async function refreshLayers() {
 	try {
-		const res = await api.fetchApi(`/sd-ppp/getlayers?client_id=${api.clientId}&user_id=${getUserId()}`);
+		const documentStrList = getDocWidgetStrs(getDocWidgetList, sendDocWidgetList);
+		const res = await api.fetchApi(`/sd-ppp/getlayers?client_id=${api.clientId}&user_id=${getUserId()}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ document_str_list: documentStrList }),
+		});
 		const json = await res.json()
-		layerStrs = json.layer_strs;
-		boundsStrs = json.bounds_strs;
-		setLayerStrs = json.set_layer_strs;
+		docStrs = json.doc_strs || [];
+		const newDocsLayerStrs = json.docs_layers_strs || {};
+		for (const [docStr, docLayerStrs] of Object.entries(newDocsLayerStrs)) {
+			const existingDocLayerStrs = docsLayerStrs[docStr] || {};
+			docsLayerStrs[docStr] = {
+				layer_strs: docLayerStrs.layer_strs || existingDocLayerStrs.layer_strs || [],
+				bounds_strs: docLayerStrs.bounds_strs || existingDocLayerStrs.bounds_strs || [],
+				set_layer_strs: docLayerStrs.set_layer_strs || existingDocLayerStrs.set_layer_strs || [],
+			}
+		}
 	} catch (e) {
 		console.error("[sd-ppp]", "Failed to get layers", e);
 	}
@@ -108,7 +169,12 @@ async function checkHistoryChanges() {
 		const mode0NodeTypes = currentState.nodes.filter(node => node.mode == 0).map(node => node.type);
 		const containsSDPPPNodes = mode0NodeTypes.some(nodeType => SDPPPNodes.includes(nodeType));
 		if (!containsSDPPPNodes) return;
-		const res = await api.fetchApi(`/sd-ppp/checkchanges?client_id=${api.clientId}&user_id=${getUserId()}`);
+		const documentStrList = getDocWidgetStrs(getDocWidgetList);
+		const res = await api.fetchApi(`/sd-ppp/checkchanges?client_id=${api.clientId}&user_id=${getUserId()}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ document_str_list: documentStrList }),
+		});
 		const json = await res.json()
 		if (!json.is_changed) return;
 		api.dispatchEvent(new CustomEvent("graphChanged"));	

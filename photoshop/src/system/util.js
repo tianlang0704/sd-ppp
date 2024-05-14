@@ -1,14 +1,18 @@
-import { core } from "photoshop";
+import { core, app } from "photoshop";
 
+export const SPECIAL_DOCUMENT_USE_ACTIVE = '### Use Active Document ###'
+export const SPECIAL_DOCUMENT_TO_ID = {
+    [SPECIAL_DOCUMENT_USE_ACTIVE]: 0
+}
 export const SPECIAL_LAYER_USE_CANVAS = '### Use Canvas ###'
 export const SPECIAL_LAYER_USE_SELECTION = '### Use Selection ###'
 export const SPECIAL_LAYER_NEW_LAYER = '### New Layer ###'
 export const SPECIAL_LAYER_SAME_AS_LAYER = '### Same as Layer ###'
 export const SPECIAL_LAYER_NAME_TO_ID = {
-    SPECIAL_LAYER_USE_CANVAS: 0,
-    SPECIAL_LAYER_USE_SELECTION: -1,
-    SPECIAL_LAYER_NEW_LAYER: -2,
-    SPECIAL_LAYER_SAME_AS_LAYER: -3
+    [SPECIAL_LAYER_USE_CANVAS]: 0,
+    [SPECIAL_LAYER_USE_SELECTION]: -1,
+    [SPECIAL_LAYER_NEW_LAYER]: -2,
+    [SPECIAL_LAYER_SAME_AS_LAYER]: -3
 }
 
 export function unTrimImageData(
@@ -87,6 +91,29 @@ export function findInAllSubLayer(layer, layerid) {
         if (result) return result;
     }
     return null;
+}
+
+export function findDocument(documentID) {
+    let document;
+    if (!app.documents.length) throw new Error('No document opened');
+    if (documentID == SPECIAL_DOCUMENT_TO_ID[SPECIAL_DOCUMENT_USE_ACTIVE]) {
+        document = app.activeDocument;
+    } else {
+        document = app.documents.find(doc => doc.id == documentID);
+    }
+    if (!document) throw new Error(`Document(id: ${documentID}) not found`);
+    return document;
+}
+
+export function getLastHistoryState(document) {
+    const historyStates = document?.historyStates;
+    if (!historyStates || historyStates.length <= 0)
+        return;
+    const filteredHistoryStates = historyStates.filter(state => state?.id);
+    if (filteredHistoryStates.length <= 0)
+        return;
+    const historyState = filteredHistoryStates[filteredHistoryStates.length - 1];
+    return historyState;
 }
 
 export async function executeAsModalUntilSuccess(...args) {
